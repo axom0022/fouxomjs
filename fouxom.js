@@ -1,95 +1,593 @@
-(function(r,f){if(typeof module==="object"&&module.exports)module.exports=f();else if(typeof define==="function"&&define.amd)define(f);else r.fouxomjs=f();}(typeof self!=="undefined"?self:this,function(){
-var ma=Math,fl=Float32Array,ui=Uint16Array,im=Image,pf=performance,dc=document,wn=window,rf=wn.requestAnimationFrame,af=Array,ob=Object;
-var gl=null,cv=null,prg=null,scn=null,cam=null,clk=null,inp={k:{},mo:{x:0,y:0,dx:0,dy:0,b:{},w:0},t:[],gp:[]},sts={d:0,t:0,v:0,f:0},texc={},ents=[],sys=[];
-var vsrc="attribute vec3 a;attribute vec3 n;attribute vec2 u;attribute vec3 c;uniform mat4 p;uniform mat4 v;uniform mat4 m;varying vec3 vn;varying vec2 uv;varying vec3 vc;varying vec3 wp;void main(){vec4 wp4=m*vec4(a,1.0);wp=wp4.xyz;vn=normalize(mat3(m)*n);vc=c;uv=u;gl_Position=p*v*wp4;}";
-var fsrc="precision highp float;varying vec3 vn;varying vec2 uv;varying vec3 vc;varying vec3 wp;uniform sampler2D tx;uniform float ht;uniform vec3 tc;uniform float op;uniform vec3 ld;uniform vec3 lc;uniform vec3 ac;void main(){vec4 t=texture2D(tx,uv);vec3 base=ht>0.5?t.rgb*tc:tc*vc;float d=max(dot(vn,normalize(ld)),0.0);vec3 amb=ac*base;vec3 dif=lc*d*base;vec3 col=amb+dif;gl_FragColor=vec4(col,op*(ht>0.5?t.a:1.0));}";
-function vec3(x,y,z){return{x:x||0,y:y||0,z:z||0}}
-function vec3add(a,b){return{x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}}
-function vec3sub(a,b){return{x:a.x-b.x,y:a.y-b.y,z:a.z-b.z}}
-function vec3scale(a,s){return{x:a.x*s,y:a.y*s,z:a.z*s}}
-function vec3dot(a,b){return a.x*b.x+a.y*b.y+a.z*b.z}
-function vec3cross(a,b){return{x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x}}
-function vec3len(a){return ma.sqrt(a.x*a.x+a.y*a.y+a.z*a.z)}
-function vec3norm(a){var l=vec3len(a)||1;return{x:a.x/l,y:a.y/l,z:a.z/l}}
-function vec3lerp(a,b,t){return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t}}
-function vec3dist(a,b){return vec3len(vec3sub(a,b))}
-function vec3clone(a){return{x:a.x,y:a.y,z:a.z}}
-function mat4(){return new fl([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
-function mat4perspective(fov,asp,near,far){var f=1/ma.tan(fov/2),nf=1/(near-far),o=new fl(16);o[0]=f/asp;o[5]=f;o[10]=(far+near)*nf;o[11]=-1;o[14]=2*far*near*nf;return o}
-function mat4lookat(eye,target,up){var z=vec3norm(vec3sub(eye,target));var x=vec3norm(vec3cross(up,z));var y=vec3cross(z,x);var o=new fl(16);o[0]=x.x;o[1]=y.x;o[2]=z.x;o[4]=x.y;o[5]=y.y;o[6]=z.y;o[8]=x.z;o[9]=y.z;o[10]=z.z;o[12]=-vec3dot(x,eye);o[13]=-vec3dot(y,eye);o[14]=-vec3dot(z,eye);o[15]=1;return o}
-function mat4mul(a,b){var o=new fl(16);for(var i=0;i<4;i++){for(var j=0;j<4;j++){var s=0;for(var k=0;k<4;k++)s+=a[i+k*4]*b[k+j*4];o[i+j*4]=s;}}return o}
-function mat4translate(m,x,y,z){var t=mat4();t[12]=x;t[13]=y;t[14]=z;return mat4mul(m,t)}
-function mat4scale(m,x,y,z){var s=mat4();s[0]=x;s[5]=y;s[10]=z;return mat4mul(m,s)}
-function mat4rotatex(m,r){var c=ma.cos(r),s=ma.sin(r),t=mat4();t[5]=c;t[6]=s;t[9]=-s;t[10]=c;return mat4mul(m,t)}
-function mat4rotatey(m,r){var c=ma.cos(r),s=ma.sin(r),t=mat4();t[0]=c;t[2]=-s;t[8]=s;t[10]=c;return mat4mul(m,t)}
-function mat4rotatez(m,r){var c=ma.cos(r),s=ma.sin(r),t=mat4();t[0]=c;t[1]=s;t[4]=-s;t[5]=c;return mat4mul(m,t)}
-function mat4invert(m){var o=new fl(16);var a00=m[0],a01=m[1],a02=m[2],a03=m[3],a10=m[4],a11=m[5],a12=m[6],a13=m[7],a20=m[8],a21=m[9],a22=m[10],a23=m[11],a30=m[12],a31=m[13],a32=m[14],a33=m[15];var b00=a00*a11-a01*a10,b01=a00*a12-a02*a10,b02=a00*a13-a03*a10,b03=a01*a12-a02*a11,b04=a01*a13-a03*a11,b05=a02*a13-a03*a12,b06=a20*a31-a21*a30,b07=a20*a32-a22*a30,b08=a20*a33-a23*a30,b09=a21*a32-a22*a31,b10=a21*a33-a23*a31,b11=a22*a33-a23*a32;var det=b00*b11-b01*b10+b02*b09+b03*b08-b04*b07+b05*b06;if(!det){console.warn("mat4invert: singular matrix");return o;}det=1.0/det;o[0]=(a11*b11-a12*b10+a13*b09)*det;o[1]=(a02*b10-a01*b11-a03*b09)*det;o[2]=(a31*b05-a32*b04+a33*b03)*det;o[3]=(a22*b04-a21*b05-a23*b03)*det;o[4]=(a12*b08-a10*b11-a13*b07)*det;o[5]=(a00*b11-a02*b08+a03*b07)*det;o[6]=(a32*b02-a30*b05-a33*b01)*det;o[7]=(a20*b05-a22*b02+a23*b01)*det;o[8]=(a10*b10-a11*b08+a13*b06)*det;o[9]=(a01*b08-a00*b10-a03*b06)*det;o[10]=(a30*b04-a31*b02+a33*b00)*det;o[11]=(a21*b02-a20*b04-a23*b00)*det;o[12]=(a11*b07-a10*b09-a12*b06)*det;o[13]=(a00*b09-a01*b07+a02*b06)*det;o[14]=(a31*b01-a30*b03-a32*b00)*det;o[15]=(a20*b03-a21*b01+a22*b00)*det;return o}
-function quat(ax,ay,az,angle){var ha=angle/2,s=ma.sin(ha);return{x:ax*s,y:ay*s,z:az*s,w:ma.cos(ha)}}
-function quatmul(a,b){return{x:a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,y:a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,z:a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,w:a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z}}
-function quatslerp(a,b,t){var cos=a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w;if(cos<0){b={x:-b.x,y:-b.y,z:-b.z,w:-b.w};cos=-cos;}if(cos>0.9995)return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t,w:a.w+(b.w-a.w)*t};var th=ma.acos(cos),sn=ma.sin(th),wa=ma.sin((1-t)*th)/sn,wb=ma.sin(t*th)/sn;return{x:a.x*wa+b.x*wb,y:a.y*wa+b.y*wb,z:a.z*wa+b.z*wb,w:a.w*wa+b.w*wb};}
-function compileshader(type,src){var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,35713)){console.error("shader compile error:",gl.getShaderInfoLog(s));}return s}
-function createprogram(vs,fs){var p=gl.createProgram();gl.attachShader(p,compileshader(35633,vs));gl.attachShader(p,compileshader(35632,fs));gl.linkProgram(p);if(!gl.getProgramParameter(p,35714)){console.error("program link error:",gl.getProgramInfoLog(p));}p.locs={};p.attrs={};return p}
-function texture(url,cb){if(texc[url]){if(cb&&texc[url].ready)cb(texc[url]);return texc[url];}var t={gl:null,img:new im(),url:url,ready:false,width:0,height:0,npot:false};texc[url]=t;t.img.crossOrigin="anonymous";t.img.onload=function(){t.width=t.img.width;t.height=t.img.height;t.npot=((t.width&(t.width-1))!==0)||((t.height&(t.height-1))!==0);t.gl=gl.createTexture();gl.bindTexture(3553,t.gl);gl.texImage2D(3553,0,6408,6408,5121,t.img);if(!t.npot){gl.generateMipmap(3553);gl.texParameteri(3553,10242,10497);gl.texParameteri(3553,10243,10497);gl.texParameteri(3553,10241,9987);gl.texParameteri(3553,10240,9729);}else{gl.texParameteri(3553,10242,33071);gl.texParameteri(3553,10243,33071);gl.texParameteri(3553,10241,9729);gl.texParameteri(3553,10240,9729);}t.ready=true;if(cb)cb(t);};t.img.onerror=function(){t.ready=true;if(cb)cb(t);};t.img.src=url;return t}
-function texturefromcolor(r,g,b){var c=dc.createElement("canvas");c.width=c.height=4;var ctx=c.getContext("2d");ctx.fillStyle="rgb("+ma.floor(r*255)+","+ma.floor(g*255)+","+ma.floor(b*255)+")";ctx.fillRect(0,0,4,4);var t={gl:gl.createTexture(),img:c,url:"color:"+r+","+g+","+b,ready:true,width:4,height:4,npot:true};gl.bindTexture(3553,t.gl);gl.texImage2D(3553,0,6408,6408,5121,c);gl.texParameteri(3553,10242,33071);gl.texParameteri(3553,10243,33071);gl.texParameteri(3553,10241,9729);gl.texParameteri(3553,10240,9729);texc[t.url]=t;return t}
-function geometry(opts){var g={v:opts.v||[],n:opts.n||[],u:opts.u||[],c:opts.c||[],i:opts.i||[],e:opts.e||[],vbo:null,nbo:null,ubo:null,cbo:null,ibo:null,ebo:null,vc:opts.v?opts.v.length/3:0,ic:opts.i?opts.i.length:0,dirty:true};return g}
-function computenormals(g){g.n=new af(g.v.length).fill(0);for(var i=0;i<g.i.length;i+=3){var ia=g.i[i]*3,ib=g.i[i+1]*3,ic=g.i[i+2]*3;var ax=g.v[ia],ay=g.v[ia+1],az=g.v[ia+2];var bx=g.v[ib],by=g.v[ib+1],bz=g.v[ib+2];var cx=g.v[ic],cy=g.v[ic+1],cz=g.v[ic+2];var ux=bx-ax,uy=by-ay,uz=bz-az;var vx=cx-ax,vy=cy-ay,vz=cz-az;var nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;g.n[ia]+=nx;g.n[ia+1]+=ny;g.n[ia+2]+=nz;g.n[ib]+=nx;g.n[ib+1]+=ny;g.n[ib+2]+=nz;g.n[ic]+=nx;g.n[ic+1]+=ny;g.n[ic+2]+=nz;}for(var i=0;i<g.n.length;i+=3){var x=g.n[i],y=g.n[i+1],z=g.n[i+2];var l=ma.sqrt(x*x+y*y+z*z)||1;g.n[i]/=l;g.n[i+1]/=l;g.n[i+2]/=l;}g.dirty=true;}
-function computeedges(g){g.e=[];var seen={};for(var i=0;i<g.i.length;i+=3){var a=g.i[i],b=g.i[i+1],c=g.i[i+2];var pairs=[[a,b],[b,c],[c,a]];for(var j=0;j<3;j++){var p=pairs[j],k=ma.min(p[0],p[1])+"_"+ma.max(p[0],p[1]);if(!seen[k]){seen[k]=1;g.e.push(p[0],p[1]);}}}g.dirty=true;}
-function geometryupload(g){if(!gl)return g;if(g.vbo)gl.deleteBuffer(g.vbo);if(g.nbo)gl.deleteBuffer(g.nbo);if(g.ubo)gl.deleteBuffer(g.ubo);if(g.cbo)gl.deleteBuffer(g.cbo);if(g.ibo)gl.deleteBuffer(g.ibo);if(g.ebo)gl.deleteBuffer(g.ebo);g.vbo=gl.createBuffer();gl.bindBuffer(34962,g.vbo);gl.bufferData(34962,new fl(g.v),35044);if(g.n.length){g.nbo=gl.createBuffer();gl.bindBuffer(34962,g.nbo);gl.bufferData(34962,new fl(g.n),35044);}if(g.u.length){g.ubo=gl.createBuffer();gl.bindBuffer(34962,g.ubo);gl.bufferData(34962,new fl(g.u),35044);}if(g.c.length){g.cbo=gl.createBuffer();gl.bindBuffer(34962,g.cbo);gl.bufferData(34962,new fl(g.c),35044);}if(g.i.length){g.ibo=gl.createBuffer();gl.bindBuffer(34963,g.ibo);gl.bufferData(34963,new ui(g.i),35044);}if(g.e.length){g.ebo=gl.createBuffer();gl.bindBuffer(34962,g.ebo);gl.bufferData(34962,new ui(g.e),35044);}g.dirty=false;return g}
-function cubegeometry(sx,sy,sz){sx=sx||1;sy=sy||1;sz=sz||1;var hx=sx/2,hy=sy/2,hz=sz/2;var v=[-hx,-hy,hz,hx,-hy,hz,hx,hy,hz,-hx,hy,hz,-hx,-hy,-hz,-hx,hy,-hz,hx,hy,-hz,hx,-hy,-hz,-hx,-hy,-hz,-hx,hy,-hz,-hx,hy,hz,-hx,-hy,hz,hx,-hy,-hz,hx,-hy,hz,hx,hy,hz,hx,hy,-hz,-hx,hy,-hz,-hx,hy,hz,hx,hy,hz,hx,hy,-hz,-hx,-hy,-hz,hx,-hy,-hz,hx,-hy,hz,-hx,-hy,hz];var n=[0,0,1,0,0,1,0,0,1,0,0,1,0,0,-1,0,0,-1,0,0,-1,0,0,-1,-1,0,0,-1,0,0,-1,0,0,-1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,0,-1,0,0,-1,0,0,-1,0,0,-1,0];var u=[0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0,1,0,1,1,0,1];var idx=[0,1,2,0,2,3,4,5,6,4,6,7,8,9,10,8,10,11,12,13,14,12,14,15,16,17,18,16,18,19,20,21,22,20,22,23];var g=geometry({v:v,n:n,u:u,i:idx});computeedges(g);return g}
-function spheregeometry(r,seg,rings){r=r||1;seg=seg||24;rings=rings||16;var v=[],n=[],u=[],idx=[];for(var y=0;y<=rings;y++){for(var x=0;x<=seg;x++){var xu=x/seg,yu=y/rings;var th=xu*ma.PI*2,ph=yu*ma.PI;var nx=ma.sin(ph)*ma.cos(th),ny=ma.cos(ph),nz=ma.sin(ph)*ma.sin(th);v.push(nx*r,ny*r,nz*r);n.push(nx,ny,nz);u.push(xu,1-yu);}}for(var y=0;y<rings;y++){for(var x=0;x<seg;x++){var a=y*(seg+1)+x,b=a+seg+1;idx.push(a,b,a+1,b,b+1,a+1);}}var g=geometry({v:v,n:n,u:u,i:idx});computeedges(g);return g}
-function cylindergeometry(rt,rb,h,seg){rt=rt||1;rb=rb||1;h=h||2;seg=seg||24;var v=[],n=[],u=[],idx=[],hh=h/2;for(var i=0;i<=seg;i++){var th=i/seg*ma.PI*2,c=ma.cos(th),s=ma.sin(th);v.push(rt*c,hh,rt*s);n.push(c,0,s);u.push(i/seg,0);v.push(rb*c,-hh,rb*s);n.push(c,0,s);u.push(i/seg,1);}for(var i=0;i<seg;i++){var a=i*2,b=a+1,c=a+2,d=a+3;idx.push(a,b,c,b,d,c);}var g=geometry({v:v,n:n,u:u,i:idx});computeedges(g);return g}
-function planegw(w,h,sw,sh){w=w||1;h=h||1;sw=sw||1;sh=sh||1;var v=[],n=[],u=[],idx=[];for(var j=0;j<=sh;j++){for(var i=0;i<=sw;i++){v.push((i/sw-0.5)*w,0,(j/sh-0.5)*h);n.push(0,1,0);u.push(i/sw,j/sh);}}for(var j=0;j<sh;j++){for(var i=0;i<sw;i++){var a=j*(sw+1)+i,b=a+sw+1;idx.push(a,b,a+1,b,b+1,a+1);}}var g=geometry({v:v,n:n,u:u,i:idx});computeedges(g);return g}
-function material(opts){opts=opts||{};return{c:opts.c||[1,1,1],t:opts.t||null,o:opts.o===undefined?1:opts.o,tr:opts.tr||false,shi:opts.shi||32,met:opts.met||0.3,wf:opts.wf||false,vc:opts.vc||false,vis:opts.vis===undefined?true:opts.vis}}
-function object3d(){return{type:"o3d",pos:vec3(0,0,0),rot:vec3(0,0,0),scl:{x:1,y:1,z:1},mat:mat4(),wmat:mat4(),par:null,ch:[],vis:true}}
-function scene(){var s=object3d();s.type="scene";s.bg=[0.1,0.1,0.15,1];s.am=[0.2,0.2,0.2];return s}
-function mesh(g,m){var o=object3d();o.type="mesh";o.g=g;o.m=m||material();return o}
-function group(){var o=object3d();o.type="group";return o}
-function camera(opts){opts=opts||{};var c=object3d();c.type="cam";c.fov=opts.fov||60;c.asp=opts.asp||1;c.near=opts.near||0.1;c.far=opts.far||1000;c.proj=mat4();c.view=mat4();c.tgt=vec3(0,0,-1);c.up={x:0,y:1,z:0};return c}
-function perspectivecamera(fov,asp,near,far){return camera({fov:fov,asp:asp,near:near,far:far})}
-function ambientlight(c,i){var l=object3d();l.type="amb";l.c=c||[1,1,1];l.i=i===undefined?1:i;return l}
-function directionallight(c,i){var l=object3d();l.type="dir";l.c=c||[1,1,1];l.i=i===undefined?1:i;l.tgt=vec3(0,0,0);return l}
-function pointlight(c,i,d){var l=object3d();l.type="pt";l.c=c||[1,1,1];l.i=i===undefined?1:i;l.d=d||0;return l}
-function addchild(p,c){c.par=p;p.ch.push(c);return c}
-function removechild(p,c){var i=p.ch.indexOf(c);if(i>=0){p.ch.splice(i,1);c.par=null;}return c}
-function traverse(o,fn){fn(o);for(var i=0;i<o.ch.length;i++)traverse(o.ch[i],fn)}
-function updatematrix(o){var m=o.mat;var p=o.pos,r=o.rot,s=o.scl;var cx=ma.cos(r.x),sx=ma.sin(r.x);var cy=ma.cos(r.y),sy=ma.sin(r.y);var cz=ma.cos(r.z),sz=ma.sin(r.z);m[0]=cy*cz*s.x;m[1]=cy*sz*s.x;m[2]=-sy*s.x;m[3]=0;m[4]=(sx*sy*cz-cx*sz)*s.y;m[5]=(sx*sy*sz+cx*cz)*s.y;m[6]=sx*cy*s.y;m[7]=0;m[8]=(cx*sy*cz+sx*sz)*s.z;m[9]=(cx*sy*sz-sx*cz)*s.z;m[10]=cx*cy*s.z;m[11]=0;m[12]=p.x;m[13]=p.y;m[14]=p.z;m[15]=1;}
-function updateworldmatrix(o,pm){if(pm)o.wmat=mat4mul(pm,o.mat);else o.wmat=o.mat.slice?o.mat.slice():fl.from(o.mat);for(var i=0;i<o.ch.length;i++)updateworldmatrix(o.ch[i],o.wmat)}
-function lookat(o,tgt){var p=o.pos;var z=vec3norm(vec3sub(p,tgt));var x=vec3norm(vec3cross({x:0,y:1,z:0},z));var y=vec3cross(z,x);var m=o.mat;m[0]=x.x;m[1]=y.x;m[2]=z.x;m[4]=x.y;m[5]=y.y;m[6]=z.y;m[8]=x.z;m[9]=y.z;m[10]=z.z;m[12]=p.x;m[13]=p.y;m[14]=p.z;m[15]=1;}
-function renderer(opts){opts=opts||{};cv=opts.cv||dc.createElement("canvas");gl=cv.getContext("webgl",{alpha:opts.alpha===undefined?true:opts.alpha,antialias:opts.antialias===undefined?true:opts.antialias})||cv.getContext("experimental-webgl");if(!gl)throw new Error("webgl fail");prg=createprogram(vsrc,fsrc);cv.width=opts.w||cv.clientWidth||800;cv.height=opts.h||cv.clientHeight||600;gl.viewport(0,0,cv.width,cv.height);gl.enable(2929);gl.enable(3042);gl.blendFunc(770,771);gl.clearColor(0.1,0.1,0.15,1);setupinput(cv);return{cv:cv,gl:gl,prg:prg}}
-function setupinput(c){wn.addEventListener("keydown",function(e){inp.k[e.key.toLowerCase()]=true;});wn.addEventListener("keyup",function(e){inp.k[e.key.toLowerCase()]=false;});c.addEventListener("mousemove",function(e){var r=c.getBoundingClientRect();inp.mo.dx=e.movementX||0;inp.mo.dy=e.movementY||0;inp.mo.x=e.clientX-r.left;inp.mo.y=e.clientY-r.top;});c.addEventListener("mousedown",function(e){inp.mo.b[e.button]=true;});c.addEventListener("mouseup",function(e){inp.mo.b[e.button]=false;});c.addEventListener("wheel",function(e){inp.mo.w=e.deltaY;e.preventDefault();},{passive:false});c.addEventListener("contextmenu",function(e){e.preventDefault();});}
-function resize(w,h){cv.width=w;cv.height=h;gl.viewport(0,0,w,h);}
-function render(s,c){if(!gl)return;updateworldmatrix(s,null);c.asp=cv.width/cv.height;c.proj=mat4perspective(c.fov*ma.PI/180,c.asp,c.near,c.far);c.view=mat4lookat(c.pos,c.tgt,c.up);var amb=null,dir=null;traverse(s,function(o){if(o.type==="amb")amb=o;if(o.type==="dir")dir=o;});var ac=amb?[amb.c[0]*amb.i,amb.c[1]*amb.i,amb.c[2]*amb.i]:[0.2,0.2,0.2];var lc=dir?[dir.c[0]*dir.i,dir.c[1]*dir.i,dir.c[2]*dir.i]:[1,1,1];var ld=dir?vec3norm(vec3sub(dir.pos,dir.tgt||vec3(0,0,0))):vec3norm(vec3(0.5,1,0.3));gl.clearColor(s.bg[0],s.bg[1],s.bg[2],s.bg[3]===undefined?1:s.bg[3]);gl.clear(16384|256);renderobject(s,c,ac,lc,ld);}
-function renderobject(o,c,ac,lc,ld){if(!o.vis)return;updatematrix(o);updateworldmatrix(o,o.par?o.par.wmat:null);if(o.type==="mesh"){var g=o.g,m=o.m;if(!m||!m.vis)return;if(g.dirty)geometryupload(g);gl.useProgram(prg);if(!prg.locs.p){prg.locs.p=gl.getUniformLocation(prg,"p");prg.locs.v=gl.getUniformLocation(prg,"v");prg.locs.m=gl.getUniformLocation(prg,"m");prg.locs.ld=gl.getUniformLocation(prg,"ld");prg.locs.lc=gl.getUniformLocation(prg,"lc");prg.locs.ac=gl.getUniformLocation(prg,"ac");prg.locs.tx=gl.getUniformLocation(prg,"tx");prg.locs.ht=gl.getUniformLocation(prg,"ht");prg.locs.tc=gl.getUniformLocation(prg,"tc");prg.locs.op=gl.getUniformLocation(prg,"op");prg.attrs.a=gl.getAttribLocation(prg,"a");prg.attrs.n=gl.getAttribLocation(prg,"n");prg.attrs.u=gl.getAttribLocation(prg,"u");prg.attrs.c=gl.getAttribLocation(prg,"c");}gl.uniformMatrix4fv(prg.locs.p,false,c.proj);gl.uniformMatrix4fv(prg.locs.v,false,c.view);gl.uniformMatrix4fv(prg.locs.m,false,o.wmat);gl.uniform3fv(prg.locs.ld,[ld.x,ld.y,ld.z]);gl.uniform3fv(prg.locs.lc,lc);gl.uniform3fv(prg.locs.ac,ac);gl.uniform3fv(prg.locs.tc,m.c||[1,1,1]);gl.uniform1f(prg.locs.op,m.o===undefined?1:m.o);var hastex=m.t;gl.uniform1f(prg.locs.ht,hastex?1:0);if(hastex){gl.activeTexture(33984);gl.bindTexture(3553,hastex.gl);gl.uniform1i(prg.locs.tx,0);}gl.enableVertexAttribArray(prg.attrs.a);gl.bindBuffer(34962,g.vbo);gl.vertexAttribPointer(prg.attrs.a,3,5126,false,0,0);if(g.nbo&&prg.attrs.n>=0){gl.enableVertexAttribArray(prg.attrs.n);gl.bindBuffer(34962,g.nbo);gl.vertexAttribPointer(prg.attrs.n,3,5126,false,0,0);}else if(prg.attrs.n>=0)gl.disableVertexAttribArray(prg.attrs.n);if(g.ubo&&prg.attrs.u>=0){gl.enableVertexAttribArray(prg.attrs.u);gl.bindBuffer(34962,g.ubo);gl.vertexAttribPointer(prg.attrs.u,2,5126,false,0,0);}else if(prg.attrs.u>=0)gl.disableVertexAttribArray(prg.attrs.u);if(g.cbo&&prg.attrs.c>=0&&m.vc){gl.enableVertexAttribArray(prg.attrs.c);gl.bindBuffer(34962,g.cbo);gl.vertexAttribPointer(prg.attrs.c,3,5126,false,0,0);}else if(prg.attrs.c>=0){gl.disableVertexAttribArray(prg.attrs.c);gl.vertexAttrib3f(prg.attrs.c,1,1,1);}if(m.wf&&g.ebo){gl.disable(2884);gl.bindBuffer(34962,g.ebo);gl.drawArrays(1,0,g.e.length);}else if(g.ibo){gl.enable(2884);gl.cullFace(1029);if(m.tr)gl.depthMask(false);gl.bindBuffer(34963,g.ibo);gl.drawElements(4,g.ic,5123,0);if(m.tr)gl.depthMask(true);}}for(var i=0;i<o.ch.length;i++)renderobject(o.ch[i],c,ac,lc,ld);}
-function clock(){return{start:pf.now(),last:pf.now(),getelapsedtime:function(){return(pf.now()-this.start)/1000;},getdelta:function(){var n=pf.now();var d=(n-this.last)/1000;this.last=n;return d;}}}
-function ray(origin,dir){return{origin:origin,direction:vec3norm(dir),intersectmesh:function(msh){var g=msh.g;var mn={x:Infinity,y:Infinity,z:Infinity},mx={x:-Infinity,y:-Infinity,z:-Infinity};for(var i=0;i<g.v.length;i+=3){var x=g.v[i],y=g.v[i+1],z=g.v[i+2];if(x<mn.x)mn.x=x;if(y<mn.y)mn.y=y;if(z<mn.z)mn.z=z;if(x>mx.x)mx.x=x;if(y>mx.y)mx.y=y;if(z>mx.z)mx.z=z;}var tmin=-Infinity,tmax=Infinity;for(var i=0;i<3;i++){var ax=["x","y","z"][i];var inv=1/this.direction[["x","y","z"][i]];var t1=(mn[["x","y","z"][i]]-this.origin[["x","y","z"][i]])*inv;var t2=(mx[["x","y","z"][i]]-this.origin[["x","y","z"][i]])*inv;if(t1>t2){var tmp=t1;t1=t2;t2=tmp;}tmin=ma.max(tmin,t1);tmax=ma.min(tmax,t2);if(tmin>tmax)return null;}if(tmax<0)return null;var t=tmin>=0?tmin:tmax;var hit=vec3add(this.origin,vec3scale(this.direction,t));return{point:hit,distance:t,object:msh};}}}
-function keydown(k){return!!inp.k[k.toLowerCase()]}
-function mousepos(){return{x:inp.mo.x,y:inp.mo.y}}
-function mousedelta(){return{dx:inp.mo.dx,dy:inp.mo.dy}}
-function mousebutton(b){return!!inp.mo.b[b]}
-function orbitcontrols(c,el){var state={c:c,el:el||cv,tgt:vec3(0,0,0),dist:5,rs:0.005,zs:0.1,sph:{th:0,ph:ma.PI/2,r:5},en:true,update:function(){if(!this.en)return;if(inp.mo.b[0]){this.sph.th-=inp.mo.dx*this.rs;this.sph.ph-=inp.mo.dy*this.rs;this.sph.ph=ma.max(0.01,ma.min(ma.PI-0.01,this.sph.ph));}if(inp.mo.w){this.sph.r*=1+inp.mo.w*this.zs*0.01;this.sph.r=ma.max(0.1,this.sph.r);}this.dist=this.sph.r;var r=this.dist,th=this.sph.th,ph=this.sph.ph;this.c.pos.x=this.tgt.x+r*ma.sin(ph)*ma.cos(th);this.c.pos.y=this.tgt.y+r*ma.cos(ph);this.c.pos.z=this.tgt.z+r*ma.sin(ph)*ma.sin(th);this.c.tgt=vec3clone(this.tgt);}};return state}
-function fpscontrols(c,el){var state={c:c,el:el||cv,spd:5,lks:0.002,yaw:0,pitch:0,en:true,update:function(dt){if(!this.en)return;if(inp.mo.b[0]){this.yaw-=inp.mo.dx*this.lks;this.pitch-=inp.mo.dy*this.lks;this.pitch=ma.max(-ma.PI/2+0.01,ma.min(ma.PI/2-0.01,this.pitch));}var forward={x:-ma.sin(this.yaw)*ma.cos(this.pitch),y:ma.sin(this.pitch),z:-ma.cos(this.yaw)*ma.cos(this.pitch)};var right={x:ma.cos(this.yaw),y:0,z:-ma.sin(this.yaw)};var mv=vec3(0,0,0);if(keydown("w")||keydown("arrowup"))mv=vec3add(mv,forward);if(keydown("s")||keydown("arrowdown"))mv=vec3sub(mv,forward);if(keydown("a")||keydown("arrowleft"))mv=vec3sub(mv,right);if(keydown("d")||keydown("arrowright"))mv=vec3add(mv,right);var l=vec3len(mv);if(l>0)mv=vec3scale(mv,1/l);this.c.pos=vec3add(this.c.pos,vec3scale(mv,this.spd*dt));this.c.tgt=vec3add(this.c.pos,forward);}};return state}
-function worldtoscreen(pos,c,w,h){var vp=mat4mul(c.proj,c.view);var p=[pos.x,pos.y,pos.z,1];var clip=[0,0,0,0];for(var i=0;i<4;i++){clip[i]=vp[i]*p[0]+vp[i+4]*p[1]+vp[i+8]*p[2]+vp[i+12]*p[3];}if(clip[3]<=0)return null;var ndc={x:clip[0]/clip[3],y:clip[1]/clip[3]};return{x:(ndc.x+1)*w/2,y:(1-ndc.y)*h/2};}
-function entity(){return{id:uuid(),comp:{}}}
-function addentity(e){ents.push(e);return e}
-function removeentity(e){var i=ents.indexOf(e);if(i>=0)ents.splice(i,1);}
-function addcomponent(e,name,data){e.comp[name]=data;return e}
-function getcomponent(e,name){return e.comp[name]}
-function removecomponent(e,name){delete e.comp[name];}
-function query(world,name){var res=[];for(var i=0;i<ents.length;i++){if(ents[i].comp[name])res.push(ents[i]);}return res}
-function system(updatefn){sys.push(updatefn);}
-function particlesystem(opts){opts=opts||{};var ps={pos:opts.pos||vec3(0,0,0),vel:opts.vel||vec3(0,1,0),life:opts.life||1,rate:opts.rate||10,size:opts.size||0.1,color:opts.color||[1,1,1],parts:[],time:0,mesh:null,emit:function(){for(var i=0;i<this.rate;i++){this.parts.push({pos:vec3clone(this.pos),vel:vec3(this.vel.x+(ma.random()-0.5)*0.5,this.vel.y+(ma.random()-0.5)*0.5,this.vel.z+(ma.random()-0.5)*0.5),life:this.life,age:0});}},update:function(dt){this.time+=dt;if(this.time>1/this.rate){this.emit();this.time=0;}var v=[],c=[];for(var i=this.parts.length-1;i>=0;i--){var p=this.parts[i];p.age+=dt;if(p.age>=p.life){this.parts.splice(i,1);continue;}p.pos=vec3add(p.pos,vec3scale(p.vel,dt));p.vel.y-=9.81*dt;v.push(p.pos.x,p.pos.y,p.pos.z);c.push(this.color[0],this.color[1],this.color[2]);}if(!this.mesh){var g=geometry({v:v,c:c});this.mesh=mesh(g,material({vc:true}));}else{this.mesh.g.v=v;this.mesh.g.c=c;this.mesh.g.dirty=true;}}};return ps}
-function navmesh(w,h,div){var nm={w:w||10,h:h||10,div:div||10,nodes:[],getnode:function(x,z){var gx=ma.floor((x+this.w/2)/this.w*this.div);var gz=ma.floor((z+this.h/2)/this.h*this.div);if(gx<0||gx>=this.div||gz<0||gz>=this.div)return null;return this.nodes[gz*this.div+gx];},init:function(){for(var z=0;z<this.div;z++){for(var x=0;x<this.div;x++){this.nodes.push({x:x,z:z,g:0,h:0,f:0,par:null,walkable:true});}}},findpath:function(start,end){this.init();var sn=this.getnode(start.x,start.z);var en=this.getnode(end.x,end.z);if(!sn||!en)return[];var open=[sn],closed=[];sn.g=0;sn.h=vec3dist(vec3(sn.x,0,sn.z),vec3(en.x,0,en.z));sn.f=sn.h;while(open.length>0){var cur=open[0];for(var i=1;i<open.length;i++){if(open[i].f<cur.f)cur=open[i];}if(cur===en){var path=[];while(cur.par){path.unshift(vec3((cur.x/this.div-0.5)*this.w,0,(cur.z/this.div-0.5)*this.h));cur=cur.par;}return path;}open.splice(open.indexOf(cur),1);closed.push(cur);var neighbors=[];var dx=[-1,0,1,0],dz=[0,-1,0,1];for(var i=0;i<4;i++){var nx=cur.x+dx[i],nz=cur.z+dz[i];var n=this.getnode(nx,nz);if(n&&!n.walkable)continue;if(n)neighbors.push(n);}for(var i=0;i<neighbors.length;i++){var n=neighbors[i];if(closed.indexOf(n)>=0)continue;var tg=cur.g+1;if(open.indexOf(n)<0||tg<n.g){n.g=tg;n.h=vec3dist(vec3(n.x,0,n.z),vec3(en.x,0,en.z));n.f=n.g+n.h;n.par=cur;if(open.indexOf(n)<0)open.push(n);}}}return [];}};nm.init();return nm}
-function assetmanager(){var am={assets:{},loading:0,loaded:0,total:0,load:function(urls,prog,done){this.total=urls.length;this.loading=urls.length;for(var i=0;i<urls.length;i++){var u=urls[i];var ext=u.split(".").pop();if(ext==="png"||ext==="jpg"||ext==="jpeg"){var t=texture(u,function(){am.loaded++;if(prog)prog(am.loaded/am.total);if(am.loaded===am.total&&done)done();});this.assets[u]=t;}else{var xhr=new wn.XMLHttpRequest();xhr.open("GET",u,true);xhr.responseType="arraybuffer";xhr.onload=function(e){var data=e.target.response;am.assets[u]=data;am.loaded++;if(prog)prog(am.loaded/am.total);if(am.loaded===am.total&&done)done();};xhr.send();}}},get:function(u){return this.assets[u];}};return am}
-function netclient(url){var nc={ws:null,handlers:{},connect:function(){this.ws=new wn.WebSocket(url);var self=this;this.ws.onmessage=function(e){var d=JSON.parse(e.data);if(self.handlers[d.type])self.handlers[d.type](d.data);};},send:function(type,data){if(this.ws&&this.ws.readyState===1)this.ws.send(JSON.stringify({type:type,data:data}));},on:function(type,fn){this.handlers[type]=fn;}};nc.connect();return nc}
-function gamepadstate(){var gps=[];var pads=wn.navigator.getGamepads?wn.navigator.getGamepads():[];for(var i=0;i<pads.length;i++){if(pads[i]){gps.push({axes:pads[i].axes,buttons:pads[i].buttons.map(function(b){return b.pressed})});}}return gps}
-function start(s,c,onframe){function loop(){var dt=clk.getdelta();for(var i=0;i<sys.length;i++)sys[i](dt);if(onframe)onframe(dt);render(s,c);inp.mo.dx=0;inp.mo.dy=0;inp.mo.w=0;rf(loop);}rf(loop);}
-function lerp(a,b,t){return a+(b-a)*t}
-function clamp(v,mn,mx){return ma.max(mn,ma.min(mx,v))}
-function random(mn,mx){if(mx===undefined){mx=mn;mn=0;}return mn+ma.random()*(mx-mn)}
-function distance(a,b){return vec3dist(a,b)}
-function uuid(){return"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(c){var r=ma.random()*16|0;return(c==="x"?r:(r&0x3|0x8)).toString(16)})}
-function color(r,g,b){if(typeof r==="string"){var s=r.replace("#","");if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];return[parseInt(s.substr(0,2),16)/255,parseInt(s.substr(2,2),16)/255,parseInt(s.substr(4,2),16)/255];}if(af.isArray(r))return r;return[r||0,g||0,b||0]}
-function init(opts){opts=opts||{};var r=renderer(opts);var s=scene();var c=perspectivecamera(60,(opts.w||800)/(opts.h||600),0.1,1000);c.pos={x:0,y:2,z:5};c.tgt={x:0,y:0,z:0};clk=clock();return{r:r,s:s,c:c}}
-var api={vec3:vec3,vec3add:vec3add,vec3sub:vec3sub,vec3scale:vec3scale,vec3dot:vec3dot,vec3cross:vec3cross,vec3len:vec3len,vec3norm:vec3norm,vec3lerp:vec3lerp,vec3dist:vec3dist,vec3clone:vec3clone,mat4:mat4,mat4perspective:mat4perspective,mat4lookat:mat4lookat,mat4mul:mat4mul,mat4translate:mat4translate,mat4scale:mat4scale,mat4rotatex:mat4rotatex,mat4rotatey:mat4rotatey,mat4rotatez:mat4rotatez,mat4invert:mat4invert,quat:quat,quatmul:quatmul,quatslerp:quatslerp,texture:texture,texturefromcolor:texturefromcolor,geometry:geometry,computenormals:computenormals,computeedges:computeedges,geometryupload:geometryupload,cubegeometry:cubegeometry,spheregeometry:spheregeometry,cylindergeometry:cylindergeometry,planegw:planegw,material:material,object3d:object3d,scene:scene,mesh:mesh,group:group,camera:camera,perspectivecamera:perspectivecamera,ambientlight:ambientlight,directionallight:directionallight,pointlight:pointlight,addchild:addchild,removechild:removechild,traverse:traverse,updatematrix:updatematrix,updateworldmatrix:updateworldmatrix,lookat:lookat,renderer:renderer,render:render,resize:resize,clock:clock,ray:ray,keydown:keydown,mousepos:mousepos,mousedelta:mousedelta,mousebutton:mousebutton,orbitcontrols:orbitcontrols,fpscontrols:fpscontrols,worldtoscreen:worldtoscreen,entity:entity,addentity:addentity,removeentity:removeentity,addcomponent:addcomponent,getcomponent:getcomponent,removecomponent:removecomponent,query:query,system:system,particlesystem:particlesystem,navmesh:navmesh,assetmanager:assetmanager,netclient:netclient,gamepadstate:gamepadstate,start:start,lerp:lerp,clamp:clamp,random:random,distance:distance,uuid:uuid,color:color,init:init};
-return api;
-}));
+class Vec3 {
+    constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    set(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+    normalize() {
+        let l = Math.hypot(this.x, this.y, this.z) || 1;
+        this.x /= l;
+        this.y /= l;
+        this.z /= l;
+        return this;
+    }
+    cross(v) {
+        let x = this.y * v.z - this.z * v.y;
+        let y = this.z * v.x - this.x * v.z;
+        let z = this.x * v.y - this.y * v.x;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+    dot(v) {
+        return this.x * v.x + this.y * v.y + this.z * v.z;
+    }
+    sub(v) {
+        this.x -= v.x;
+        this.y -= v.y;
+        this.z -= v.z;
+        return this;
+    }
+    clone() {
+        return new Vec3(this.x, this.y, this.z);
+    }
+}
+
+class Mat4 {
+    constructor() {
+        this.m = new Float32Array(16);
+        this.identity();
+    }
+    identity() {
+        this.m.fill(0);
+        this.m[0] = this.m[5] = this.m[10] = this.m[15] = 1;
+        return this;
+    }
+    perspective(fov, aspect, near, far) {
+        let f = 1.0 / Math.tan(fov / 2);
+        let nf = 1 / (near - far);
+        let m = this.m;
+        m.fill(0);
+        m[0] = f / aspect;
+        m[5] = f;
+        m[10] = (far + near) * nf;
+        m[11] = -1;
+        m[14] = 2 * far * near * nf;
+        return this;
+    }
+    lookAt(eye, center, up) {
+        let z = eye.clone().sub(center).normalize();
+        let x = up.clone().cross(z).normalize();
+        let y = z.clone().cross(x).normalize();
+        let m = this.m;
+        m[0] = x.x; m[4] = x.y; m[8] = x.z; m[12] = -x.dot(eye);
+        m[1] = y.x; m[5] = y.y; m[9] = y.z; m[13] = -y.dot(eye);
+        m[2] = z.x; m[6] = z.y; m[10] = z.z; m[14] = -z.dot(eye);
+        m[3] = 0; m[7] = 0; m[11] = 0; m[15] = 1;
+        return this;
+    }
+    multiply(b) {
+        let a = this.m;
+        let bm = b.m;
+        let out = new Float32Array(16);
+        for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 4; j++) {
+                out[i * 4 + j] = a[i * 4] * bm[j] + a[i * 4 + 1] * bm[4 + j] + a[i * 4 + 2] * bm[8 + j] + a[i * 4 + 3] * bm[12 + j];
+            }
+        }
+        this.m = out;
+        return this;
+    }
+    translate(x, y, z) {
+        let m = this.m;
+        m[12] += m[0] * x + m[4] * y + m[8] * z;
+        m[13] += m[1] * x + m[5] * y + m[9] * z;
+        m[14] += m[2] * x + m[6] * y + m[10] * z;
+        return this;
+    }
+    scale(x, y, z) {
+        let m = this.m;
+        m[0] *= x; m[1] *= x; m[2] *= x;
+        m[4] *= y; m[5] *= y; m[6] *= y;
+        m[8] *= z; m[9] *= z; m[10] *= z;
+        return this;
+    }
+    rotateY(rad) {
+        let s = Math.sin(rad);
+        let c = Math.cos(rad);
+        let m = this.m;
+        let a0 = m[0], a1 = m[1], a2 = m[2], a3 = m[3];
+        let b0 = m[8], b1 = m[9], b2 = m[10], b3 = m[11];
+        m[0] = a0 * c + b0 * s; m[1] = a1 * c + b1 * s; m[2] = a2 * c + b2 * s; m[3] = a3 * c + b3 * s;
+        m[8] = b0 * c - a0 * s; m[9] = b1 * c - a1 * s; m[10] = b2 * c - a2 * s; m[11] = b3 * c - a3 * s;
+        return this;
+    }
+    rotateX(rad) {
+        let s = Math.sin(rad);
+        let c = Math.cos(rad);
+        let m = this.m;
+        let a0 = m[4], a1 = m[5], a2 = m[6], a3 = m[7];
+        let b0 = m[8], b1 = m[9], b2 = m[10], b3 = m[11];
+        m[4] = a0 * c + b0 * s; m[5] = a1 * c + b1 * s; m[6] = a2 * c + b2 * s; m[7] = a3 * c + b3 * s;
+        m[8] = b0 * c - a0 * s; m[9] = b1 * c - a1 * s; m[10] = b2 * c - a2 * s; m[11] = b3 * c - a3 * s;
+        return this;
+    }
+    rotateZ(rad) {
+        let s = Math.sin(rad);
+        let c = Math.cos(rad);
+        let m = this.m;
+        let a0 = m[0], a1 = m[1], a2 = m[2], a3 = m[3];
+        let b0 = m[4], b1 = m[5], b2 = m[6], b3 = m[7];
+        m[0] = a0 * c + b0 * s; m[1] = a1 * c + b1 * s; m[2] = a2 * c + b2 * s; m[3] = a3 * c + b3 * s;
+        m[4] = b0 * c - a0 * s; m[5] = b1 * c - a1 * s; m[6] = b2 * c - a2 * s; m[7] = b3 * c - a3 * s;
+        return this;
+    }
+}
+
+function normalFromMat4(m) {
+    let a00 = m[0], a01 = m[1], a02 = m[2];
+    let a10 = m[4], a11 = m[5], a12 = m[6];
+    let a20 = m[8], a21 = m[9], a22 = m[10];
+    let b01 = a22 * a11 - a12 * a21;
+    let b11 = -a22 * a10 + a12 * a20;
+    let b21 = a21 * a10 - a11 * a20;
+    let det = a00 * b01 + a01 * b11 + a02 * b21;
+    if (!det) return new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    det = 1.0 / det;
+    return new Float32Array([
+        b01 * det, (-a22 * a01 + a02 * a21) * det, (a12 * a01 - a02 * a11) * det,
+        b11 * det, (a22 * a00 - a02 * a20) * det, (-a12 * a00 + a02 * a10) * det,
+        b21 * det, (-a21 * a00 + a01 * a20) * det, (a11 * a00 - a01 * a10) * det
+    ]);
+}
+
+class Object3D {
+    constructor() {
+        this.position = new Vec3();
+        this.rotation = new Vec3();
+        this.scale = new Vec3(1, 1, 1);
+        this.children = [];
+        this.parent = null;
+        this.matrix = new Mat4();
+        this.worldMatrix = new Mat4();
+    }
+    add(child) {
+        if (child.parent) child.parent.remove(child);
+        child.parent = this;
+        this.children.push(child);
+        return this;
+    }
+    remove(child) {
+        let i = this.children.indexOf(child);
+        if (i !== -1) {
+            this.children.splice(i, 1);
+            child.parent = null;
+        }
+        return this;
+    }
+    updateMatrix() {
+        this.matrix.identity()
+            .translate(this.position.x, this.position.y, this.position.z)
+            .rotateY(this.rotation.y)
+            .rotateX(this.rotation.x)
+            .rotateZ(this.rotation.z)
+            .scale(this.scale.x, this.scale.y, this.scale.z);
+    }
+    updateWorldMatrix(parentMatrix) {
+        this.updateMatrix();
+        if (parentMatrix) {
+            this.worldMatrix.m = new Float32Array(parentMatrix.m);
+            this.worldMatrix.multiply(this.matrix);
+        } else {
+            this.worldMatrix.m = new Float32Array(this.matrix.m);
+        }
+        for (let child of this.children) {
+            child.updateWorldMatrix(this.worldMatrix);
+        }
+    }
+}
+
+class Scene extends Object3D {
+    constructor() {
+        super();
+        this.background = [0.05, 0.05, 0.08];
+    }
+}
+
+class PerspectiveCamera extends Object3D {
+    constructor(fov, aspect, near, far) {
+        super();
+        this.fov = fov;
+        this.aspect = aspect;
+        this.near = near;
+        this.far = far;
+        this.projectionMatrix = new Mat4();
+        this.viewMatrix = new Mat4();
+        this.target = new Vec3(0, 0, -1);
+        this.updateProjectionMatrix();
+    }
+    updateProjectionMatrix() {
+        this.projectionMatrix.perspective(this.fov, this.aspect, this.near, this.far);
+    }
+    updateViewMatrix() {
+        let eye = this.position;
+        let up = new Vec3(0, 1, 0);
+        let dir = this.target.clone().normalize();
+        let targetPos = new Vec3(eye.x + dir.x, eye.y + dir.y, eye.z + dir.z);
+        this.viewMatrix.lookAt(eye, targetPos, up);
+    }
+}
+
+class BufferGeometry {
+    constructor() {
+        this.attributes = {};
+        this.index = null;
+        this.glBuffers = {};
+    }
+    setAttribute(name, data, size) {
+        this.attributes[name] = { data: new Float32Array(data), size };
+        return this;
+    }
+    setIndex(data) {
+        this.index = data.length > 65535 ? new Uint32Array(data) : new Uint16Array(data);
+        return this;
+    }
+    dispose(gl) {
+        for (let k in this.glBuffers) gl.deleteBuffer(this.glBuffers[k]);
+    }
+}
+
+class BoxGeometry extends BufferGeometry {
+    constructor(w = 1, h = 1, d = 1) {
+        super();
+        let hw = w / 2, hh = h / 2, hd = d / 2;
+        let positions = [
+            -hw, -hh, hd, hw, -hh, hd, hw, hh, hd, -hw, hh, hd,
+            -hw, -hh, -hd, -hw, hh, -hd, hw, hh, -hd, hw, -hh, -hd,
+            -hw, hh, -hd, -hw, hh, hd, hw, hh, hd, hw, hh, -hd,
+            -hw, -hh, -hd, hw, -hh, -hd, hw, -hh, hd, -hw, -hh, hd,
+            hw, -hh, -hd, hw, hh, -hd, hw, hh, hd, hw, -hh, hd,
+            -hw, -hh, -hd, -hw, -hh, hd, -hw, hh, hd, -hw, hh, -hd
+        ];
+        let normals = [
+            0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+            0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+            0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+            0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+            1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+            -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0
+        ];
+        let indices = [];
+        for (let i = 0; i < 6; i++) {
+            let o = i * 4;
+            indices.push(o, o + 1, o + 2, o, o + 2, o + 3);
+        }
+        this.setAttribute('position', positions, 3);
+        this.setAttribute('normal', normals, 3);
+        this.setIndex(indices);
+    }
+}
+
+class SphereGeometry extends BufferGeometry {
+    constructor(radius = 1, widthSeg = 32, heightSeg = 16) {
+        super();
+        let pos = [], norm = [], idx = [];
+        for (let y = 0; y <= heightSeg; y++) {
+            let v = y / heightSeg;
+            let phi = v * Math.PI;
+            for (let x = 0; x <= widthSeg; x++) {
+                let u = x / widthSeg;
+                let theta = u * Math.PI * 2;
+                let px = -radius * Math.cos(theta) * Math.sin(phi);
+                let py = radius * Math.cos(phi);
+                let pz = radius * Math.sin(theta) * Math.sin(phi);
+                pos.push(px, py, pz);
+                let n = new Vec3(px, py, pz).normalize();
+                norm.push(n.x, n.y, n.z);
+            }
+        }
+        for (let y = 0; y < heightSeg; y++) {
+            for (let x = 0; x < widthSeg; x++) {
+                let a = y * (widthSeg + 1) + x;
+                let b = a + widthSeg + 1;
+                idx.push(a, b, a + 1, b, b + 1, a + 1);
+            }
+        }
+        this.setAttribute('position', pos, 3);
+        this.setAttribute('normal', norm, 3);
+        this.setIndex(idx);
+    }
+}
+
+class Material {
+    constructor(params = {}) {
+        this.color = params.color || [1, 1, 1];
+        this.emissive = params.emissive || [0, 0, 0];
+        this.shininess = params.shininess || 32.0;
+        this.program = null;
+        this.uniforms = {};
+    }
+}
+
+class MeshPhongMaterial extends Material {
+    constructor(params) {
+        super(params);
+        this.type = 'phong';
+    }
+}
+
+class Mesh extends Object3D {
+    constructor(geometry, material) {
+        super();
+        this.geometry = geometry;
+        this.material = material;
+    }
+}
+
+class Light extends Object3D {
+    constructor(color = [1, 1, 1]) {
+        super();
+        this.color = color;
+    }
+}
+
+class DirectionalLight extends Light {
+    constructor(color, intensity = 1.0) {
+        super(color);
+        this.intensity = intensity;
+        this.type = 'directional';
+    }
+}
+
+class PointLight extends Light {
+    constructor(color, intensity = 1.0, distance = 0.0) {
+        super(color);
+        this.intensity = intensity;
+        this.distance = distance;
+        this.type = 'point';
+    }
+}
+
+class WebGLRenderer {
+    constructor(params = {}) {
+        this.canvas = params.canvas || document.createElement('canvas');
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.display = 'block';
+        this.gl = this.canvas.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
+        if (!this.gl) throw new Error('WebGL2 not supported');
+        this.gl.enable(this.gl.DEPTH_TEST);
+        this.gl.enable(this.gl.CULL_FACE);
+        this.gl.cullFace(this.gl.BACK);
+        this.programs = {};
+        this.initShaders();
+        this.resizeObserver = new ResizeObserver(() => this.handleResize());
+        this.handleResize();
+    }
+    attachTo(element) {
+        element.appendChild(this.canvas);
+        this.resizeObserver.observe(element);
+        this.handleResize();
+        return this;
+    }
+    handleResize() {
+        let parent = this.canvas.parentElement || document.body;
+        let w = parent.clientWidth;
+        let h = parent.clientHeight;
+        let dpr = window.devicePixelRatio || 1;
+        let rw = Math.floor(w * dpr);
+        let rh = Math.floor(h * dpr);
+        if (this.canvas.width !== rw || this.canvas.height !== rh) {
+            this.canvas.width = rw;
+            this.canvas.height = rh;
+            this.gl.viewport(0, 0, rw, rh);
+            if (this.onResize) this.onResize(w, h);
+        }
+    }
+    initShaders() {
+        let gl = this.gl;
+        let vs = `#version 300 es
+        in vec3 position;
+        in vec3 normal;
+        uniform mat4 modelMatrix;
+        uniform mat4 viewMatrix;
+        uniform mat4 projectionMatrix;
+        uniform mat3 normalMatrix;
+        out vec3 vNormal;
+        out vec3 vWorldPos;
+        void main() {
+            vec4 worldPos = modelMatrix * vec4(position, 1.0);
+            vWorldPos = worldPos.xyz;
+            vNormal = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }`;
+        let fs = `#version 300 es
+        precision highp float;
+        in vec3 vNormal;
+        in vec3 vWorldPos;
+        uniform vec3 uColor;
+        uniform vec3 uEmissive;
+        uniform float uShininess;
+        uniform vec3 uViewPos;
+        uniform vec3 uLightDirs[8];
+        uniform vec3 uLightColors[8];
+        uniform int uLightCount;
+        uniform int uLightTypes[8];
+        out vec4 fragColor;
+        void main() {
+            vec3 norm = normalize(vNormal);
+            vec3 viewDir = normalize(uViewPos - vWorldPos);
+            vec3 result = uEmissive;
+            for(int i=0; i<8; i++) {
+                if(i >= uLightCount) break;
+                vec3 lightDir;
+                float attenuation = 1.0;
+                if(uLightTypes[i] == 1) {
+                    vec3 diff = uLightDirs[i] - vWorldPos;
+                    float dist = length(diff);
+                    lightDir = normalize(diff);
+                    attenuation = 1.0 / (1.0 + 0.09 * dist + 0.032 * dist * dist);
+                } else {
+                    lightDir = normalize(-uLightDirs[i]);
+                }
+                float diff = max(dot(norm, lightDir), 0.0);
+                vec3 reflectDir = reflect(-lightDir, norm);
+                float spec = pow(max(dot(viewDir, reflectDir), 0.0), uShininess);
+                result += (diff * uColor + spec * 0.5) * uLightColors[i] * attenuation;
+            }
+            fragColor = vec4(result, 1.0);
+        }`;
+        let program = this.createProgram(vs, fs);
+        this.programs.phong = {
+            program,
+            attribs: {
+                position: gl.getAttribLocation(program, 'position'),
+                normal: gl.getAttribLocation(program, 'normal')
+            },
+            uniforms: {
+                modelMatrix: gl.getUniformLocation(program, 'modelMatrix'),
+                viewMatrix: gl.getUniformLocation(program, 'viewMatrix'),
+                projectionMatrix: gl.getUniformLocation(program, 'projectionMatrix'),
+                normalMatrix: gl.getUniformLocation(program, 'normalMatrix'),
+                uColor: gl.getUniformLocation(program, 'uColor'),
+                uEmissive: gl.getUniformLocation(program, 'uEmissive'),
+                uShininess: gl.getUniformLocation(program, 'uShininess'),
+                uViewPos: gl.getUniformLocation(program, 'uViewPos'),
+                uLightDirs: gl.getUniformLocation(program, 'uLightDirs'),
+                uLightColors: gl.getUniformLocation(program, 'uLightColors'),
+                uLightCount: gl.getUniformLocation(program, 'uLightCount'),
+                uLightTypes: gl.getUniformLocation(program, 'uLightTypes')
+            }
+        };
+    }
+    createProgram(vsSrc, fsSrc) {
+        let gl = this.gl;
+        let vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, vsSrc);
+        gl.compileShader(vs);
+        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(vs));
+        let fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, fsSrc);
+        gl.compileShader(fs);
+        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(fs));
+        let p = gl.createProgram();
+        gl.attachShader(p, vs);
+        gl.attachShader(p, fs);
+        gl.linkProgram(p);
+        if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+        return p;
+    }
+    setupGeometry(geom) {
+        let gl = this.gl;
+        for (let name in geom.attributes) {
+            let attr = geom.attributes[name];
+            let buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ARRAY_BUFFER, attr.data, gl.STATIC_DRAW);
+            geom.glBuffers[name] = buf;
+        }
+        if (geom.index) {
+            let buf = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geom.index, gl.STATIC_DRAW);
+            geom.glBuffers.index = buf;
+        }
+    }
+    traverse(obj, callback) {
+        callback(obj);
+        for (let child of obj.children) this.traverse(child, callback);
+    }
+    render(scene, camera) {
+        let gl = this.gl;
+        gl.clearColor(scene.background[0], scene.background[1], scene.background[2], 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        scene.updateWorldMatrix();
+        camera.updateWorldMatrix();
+        camera.updateViewMatrix();
+        if (camera.aspect !== (this.canvas.width / this.canvas.height)) {
+            camera.aspect = this.canvas.width / this.canvas.height;
+            camera.updateProjectionMatrix();
+        }
+        let lights = [];
+        this.traverse(scene, (obj) => {
+            if (obj.type === 'directional' || obj.type === 'point') lights.push(obj);
+        });
+        let p = this.programs.phong;
+        gl.useProgram(p.program);
+        gl.uniformMatrix4fv(p.uniforms.projectionMatrix, false, camera.projectionMatrix.m);
+        gl.uniformMatrix4fv(p.uniforms.viewMatrix, false, camera.viewMatrix.m);
+        gl.uniform3fv(p.uniforms.uViewPos, [camera.position.x, camera.position.y, camera.position.z]);
+        let lightDirs = new Float32Array(24);
+        let lightColors = new Float32Array(24);
+        let lightTypes = new Int32Array(8);
+        for (let i = 0; i < Math.min(lights.length, 8); i++) {
+            let l = lights[i];
+            lightDirs[i * 3] = l.position.x;
+            lightDirs[i * 3 + 1] = l.position.y;
+            lightDirs[i * 3 + 2] = l.position.z;
+            lightColors[i * 3] = l.color[0] * l.intensity;
+            lightColors[i * 3 + 1] = l.color[1] * l.intensity;
+            lightColors[i * 3 + 2] = l.color[2] * l.intensity;
+            lightTypes[i] = l.type === 'point' ? 1 : 0;
+        }
+        gl.uniform3fv(p.uniforms.uLightDirs, lightDirs);
+        gl.uniform3fv(p.uniforms.uLightColors, lightColors);
+        gl.uniform1iv(p.uniforms.uLightTypes, lightTypes);
+        gl.uniform1i(p.uniforms.uLightCount, Math.min(lights.length, 8));
+        this.traverse(scene, (obj) => {
+            if (obj instanceof Mesh) {
+                if (!obj.geometry.glBuffers.position) this.setupGeometry(obj.geometry);
+                let geom = obj.geometry;
+                let mat = obj.material;
+                gl.uniformMatrix4fv(p.uniforms.modelMatrix, false, obj.worldMatrix.m);
+                gl.uniformMatrix3fv(p.uniforms.normalMatrix, false, normalFromMat4(obj.worldMatrix.m));
+                gl.uniform3fv(p.uniforms.uColor, mat.color);
+                gl.uniform3fv(p.uniforms.uEmissive, mat.emissive);
+                gl.uniform1f(p.uniforms.uShininess, mat.shininess);
+                gl.bindBuffer(gl.ARRAY_BUFFER, geom.glBuffers.position);
+                gl.enableVertexAttribArray(p.attribs.position);
+                gl.vertexAttribPointer(p.attribs.position, 3, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, geom.glBuffers.normal);
+                gl.enableVertexAttribArray(p.attribs.normal);
+                gl.vertexAttribPointer(p.attribs.normal, 3, gl.FLOAT, false, 0, 0);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, geom.glBuffers.index);
+                let type = geom.index instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+                if (type === gl.UNSIGNED_INT) gl.getExtension('OES_element_index_uint');
+                gl.drawElements(gl.TRIANGLES, geom.index.length, type, 0);
+            }
+        });
+    }
+    start(scene, camera) {
+        let loop = () => {
+            this.render(scene, camera);
+            requestAnimationFrame(loop);
+        };
+        loop();
+        return this;
+    }
+}
+
+window.Fouxom = {
+    Vec3,
+    Mat4,
+    Object3D,
+    Scene,
+    PerspectiveCamera,
+    BufferGeometry,
+    BoxGeometry,
+    SphereGeometry,
+    Material,
+    MeshPhongMaterial,
+    Mesh,
+    Light,
+    DirectionalLight,
+    PointLight,
+    WebGLRenderer
+};
